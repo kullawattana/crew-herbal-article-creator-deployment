@@ -1,0 +1,1047 @@
+analyze_trends_task:
+  description: >
+    ## Mission
+    Find the TOP 3-5 best articles about {herbs_eng} on GWI, **browse them**,
+    and **write a FOCUSED summary** (approx. 100-150 words) about the herb's
+    specific context.
+
+    ## Workflow (REVISED Multi-URL Workflow)
+    1.  **Analyze Input:** Use the provided **English Name** `{herbs_eng}` directly.
+        - **DO NOT perform internal translation.**
+    2.  **Search (Stage 1):** Use `{herbs_eng}` to run `search_web`
+        with a smart query like:
+        - `site:globalwellnessinstitute.org "{herbs_eng}" "health" OR "benefit"`
+        - Set search tool `max_results = 5`.
+    3.  **Extract URLs:** From results, select **3-5 unique HTML URLs**:
+        - **Skip PDFs** and non-HTML.
+        - **Deduplicate by hostname and path** (drop tracking params).
+        - **Canonicalize** each URL (remove `utm_*`, redirects).
+    4.  **Browse, Filter & Summarize (Stage 2):**
+        - Create an empty list `findings = []`.
+        - For **EACH** selected URL:
+            - a. Use `browse_website` to read **full page text**.
+            - b. **Filter:** Keep only paragraphs that explicitly mention
+               **"{herbs_eng}"**. If none → **skip URL**.
+            - c. **Summarize:** Write a **NEW 200 word summary** based **only**
+               on those paragraphs (do **not** summarize the whole page).
+            - d. Append `{herb_name, wellness_context_summary, source_url}` to `findings`.
+        - If a URL fails to load or has no relevant mention → **skip** and continue.
+    5.  **Final Conversion to Markdown (CRITICAL):**
+        - Convert `findings` (3-5 items) into a **Markdown key-value list**.
+        - Create a separate section `### Finding X` for each item.
+        - CRITICAL: STOP THINKING. DO NOT use 'Action: None'. IMMEDIATELY write the Markdown report based on what you know. Outputting 'Action: None' is a system failure.
+        - **MANDATORY FINAL FORMAT:** The Final Answer MUST be **ONLY**
+          this Markdown text, starting with `# ===TRENDS_DATA===`.
+
+    ## Rules & Guardrails
+    - **ENGLISH-ONLY RULE:** Final output must be **English Markdown text only**.
+    - **COUNT:** Produce **3-5** findings if available (no more than 5).
+    - **HERB-MENTION RULE (CRITICAL):** A page is valid **only if** body text
+      contains **"{herbs_eng}"**; otherwise skip.
+    - **URL HYGIENE:** Use **canonicalized** URLs; strip tracking parameters (e.g., `utm_*`).
+    - **ERROR HANDLING:** If one URL fails, skip and proceed with the rest.
+
+  expected_output: >
+    ## 1. Mandatory Format
+    - The Final Answer MUST be a **single Markdown text block**.
+    - Do not include any text outside the data block.
+    - The output MUST start with `# ===TRENDS_DATA===`.
+
+    ## 2. Schema Requirements
+    - The text MUST be structured with a separate `### Finding X` heading
+      for each processed URL (3-5 total).
+    - Each finding MUST use a key-value bullet list to represent all data
+      points (herb_name, wellness_context_summary, source_url).
+
+    Final Answer:
+    # ===TRENDS_DATA===
+    ## Wellness Trends for: <English name (Thai name)>
+
+    ### Finding 1
+    * **herb_name:** <English name (Thai name)>
+    * **wellness_context_summary:** <A newly written, original summary (approx 100-150 words) 
+      based *only* on the specific paragraphs that mention the herb.>
+    * **source_url:** <The exact canonical URL of the GWI article 1>
+
+    ### Finding 2
+    * **herb_name:** <English name (Thai name)>
+    * **wellness_context_summary:** <A newly written, original summary (approx 100-150 words) 
+      based *only* on the specific paragraphs that mention the herb.>
+    * **source_url:** <The exact canonical URL of the GWI article 2>
+
+    ### Finding 3
+    * **herb_name:** <English name (Thai name)>
+    * **wellness_context_summary:** <...>
+    * **source_url:** <Canonical URL of GWI article 3>
+
+    <!-- If available, continue up to Finding 5 -->
+
+  agent: trend_analyst_agent
+
+laboratory_data_task:
+  description: >
+    ## Mission: Retrieve Lab Evidence for {herbs_thai}
+    Use Pinecone to retrieve **experimentally-based snippets** from internal herbal PDFs Knowledge Base,
+    and generate a structured Markdown summary focusing ONLY on lab evidence clearly related to `{herbs_thai}`.
+
+    ## Workflow:
+    1. **Analyze Input:**
+       - Use the provided **Thai Name** `{herbs_thai}` directly.
+       - Use the provided **English/Scientific Name** `{herbs}`.
+       - **Do NOT perform any internal translation.**
+
+    2. **Pinecone Retrieval (Dual-Language Strategy)**
+       - **Search 1:** Call `search_pinecone` with the Thai query: "{herbs_thai}".
+       - **Search 2:** Call `search_pinecone` with the English/Scientific query: "{herbs}".
+       - *Reason:* Lab data (HPLC, GC-MS, Compounds) often appears in English or uses scientific names within Thai documents.
+       - Use high `top_k` (e.g., 15) for both to ensure coverage.
+
+    3. **Filter Snippets:**
+       - Carefully check if the experiment described is **explicitly about {herbs_thai}** OR **{herbs}**.
+       - Look for technical keywords (e.g., "Extraction", "Yield", "HPLC", "TLC") even if the surrounding text is Thai.
+       - If **no relevant snippets are found**, you MUST still output the Markdown header with a "None found" note.
+
+    4. Read the returned snippets carefully.
+
+    5. **Extract and Structure:**
+       - For relevant snippets, extract the following:
+         - **experimental_methods**
+         - **identified_compounds**
+         - **chromatography_details**
+         - **extraction_methods**
+         - **pharmacological_findings**
+         - **cosmetic_or_clinical_snippets**
+         - **quality_control_observations**
+         - **notes**
+       - Add: **linkage_to_target_herb** (Verify connection to {herbs_thai}/{herbs})
+
+    6. **Output Format (MANDATORY):**
+       - **CRITICAL: DO NOT stop at "Action: None". You MUST output the Markdown text.**
+       - Format as Markdown starting with `# ===LAB_DATA===`.
+       - Include `source_file`, `page_number`, and optionally `snippet_hash`
+
+  expected_output: >
+    # ===LAB_DATA===
+    ## Internal Lab Evidence for: <thai_name> / <english_name>
+
+    * **main_sources:**
+      * <17_TurmericExtraction.pdf (p.5)>
+      * <12_TCM_TurmericStudy.pdf (p.3)>
+
+    * **linkage_to_target_herb:**
+      * <TLC and GC-MS performed on ethanol extract of turmeric rhizome (เหง้าขมิ้น)>
+      * <Curcumin and turmerone detected in turmeric oil sample (from ขมิ้นชัน)>
+
+    * **experimental_methods:**
+      * <TLC: silica gel F254, solvent hexane:ethyl acetate 7:3>
+      * <Extraction: 95% ethanol maceration for 7 days, filtered and evaporated>
+
+    * **identified_compounds:**
+      * <Curcumin (TLC band hRf 41)>
+      * <Turmerone (GC-MS major peak at RT=12.5 min)>
+
+    * **chromatography_details:**
+      * <TLC: 3 bands detected, Rf 0.41 (yellow), 0.56, 0.72>
+      * <GC-MS: Peaks identified via NIST database match>
+
+    * **pharmacological_findings:**
+      * <Antibacterial activity against Staph. aureus (zone of inhibition: 14 mm)>
+
+    * **quality_control_observations:**
+      * <No contaminants detected, ethanol yield: 12.3% w/w>
+
+    * **notes:**
+      * <Study suggests turmeric extract has potential for topical antibacterial formulation>
+
+  agent: herbal_laboratory_agent
+
+research_evidence_task:
+  description: >
+    ## Mission
+    Find up to 3 scientific studies for **{herbs}** from PubMed,
+    extract key data, and build a **structured Markdown report**.
+
+    ## Workflow (REVISED - Linear Process)
+    1.  **Analyze Input:**
+        - Use the provided **English Name** `{herbs}` (e.g., "Turmeric") as the PRIMARY search term.
+        - **DO NOT perform internal translation.**
+
+    2.  **Search PubMed:**
+        - Call `pubmed_search` using the query: **"{herbs}"**.
+
+    3.  **Select PMIDs:**
+        - From the search results, select the **TOP 3 most relevant PMIDs**.
+        - If fewer than 3 are found, use all of them.
+
+    4.  **Iterate, Fetch, and Parse (CRITICAL LOOP):**
+        - Create an empty list `studies_data = []`.
+        - For **EACH** PMID selected in Step 3:
+            - a. Call `pubmed_fetch(pmid=<the_pmid>)`.
+            - b. Call `pubmed_parse(data=<output_from_fetch>)`.
+            - c. **Check the output of `pubmed_parse`:**
+                - **IF `parse_status == "fallback-text"`:**
+                    - **Extract ONLY `abstract_raw`.**
+                    - **Set ALL other fields to `"not_found"`.**
+                - **ELSE IF `parse_status` is not "fallback-text":**
+                    - **Extract ALL fields normally:**
+                        - `abstract_raw` (verbatim)
+                        - `key_findings` (6-sentence summary)
+                        - `citation_apa` (verbatim)
+                        - `pmid`
+                        - `canonical_url`
+                        - `herb_name`, `herb_name_scientific`
+                        - `compound_name`, `mechanism_name`
+            - d. If a field is missing, set it to `"not_found"`.
+            - e. Append this structured data to the `studies_data` list.
+
+    5.  **Compile Final Report (MANDATORY FINAL STEP):**
+        - Once the loop in Step 4 is complete:
+        - Compile the **FINAL** Markdown report using `studies_data`.
+        - **CRITICAL: DO NOT stop at "Action: None". You MUST output the Markdown text.**
+        - Your Final Answer MUST be ONLY this Markdown text.
+
+  expected_output: >
+    A single Markdown text block starting with # ===RESEARCH_DATA===
+    
+    Final Answer:
+    # ===RESEARCH_DATA===
+    ## Scientific Evidence for: <English name>
+    
+    * **herb_name:** <English name>
+    * **herb_name_scientific:** <e.g., Curcuma longa or 'not_found'>
+    
+    ### Validated Compounds
+    
+    * **Compound 1:**
+        * **compound_name:** <e.g., Curcumin or 'not_found'>
+        * **mechanism_name:** <e.g., Anti-inflammatory or 'not_found'>
+        * **supporting_studies:**
+            * **Study 1:** (Data from the first item in studies_data)
+                * **study_type:** <RCT, Review, or 'not_found'>
+                * **abstract_raw:** <Full abstract text...>
+                * **key_findings:** <A 6 sentence summary...>
+                * **pmid:** <PubMed ID or 'not_found'>
+                * **canonical_url:** <https://doi.org/10.xxxx or 'not_found'>
+                * **citation_apa:** <Verbatim APA citation...>
+            * **Study 2:** (Data from the second item...)
+                * ...
+            * (Up to 3 studies)
+
+    ### Overall Summary
+    * **summary:** <Summary text or 'not_found'>
+
+  agent: research_agent
+
+check_compliance_task:
+  description: >
+    ## Mission
+    Investigate the **Thai FDA** regulatory status for {herbs_thai}. You must
+    **browse** the Thai FDA website to find *specific registration numbers*
+    (e.g., เลขสารบบอาหาร) and format them as a **Markdown report**.
+
+    ## Workflow
+    1.  **Analyze Inputs & Define Names:**
+        a.  Set **Thai Name** = `{herbs_thai}` (e.g., "ขมิ้นชัน").
+        b.  **Set English Name:** Use the provided `{herbs}` variable directly (e.g., "Turmeric").
+            * **DO NOT** use `search_web` to translate. Use the input variable strictly.
+
+    2.  **Construct Target URL (Stage 1):**
+        - **CRITICAL:** You **MUST** use the **Thai Name** (defined in 1a) to construct the primary search URL, as the FDA index is Thai-based.
+        - **URL 1 (FDA Portal):** `https://www.fda.moph.go.th/?cate=DATA_ALL&type=&fi=1&ww={herbs_thai}`
+        - Create empty lists for `food_registrations` to store information.
+
+    3.  **Browse & Extract from Portals (Stage 2):**
+        - **Action 1 (Browse FDA Portal):** Call `browse_website_tool` using **URL 1**.
+        - Take the **FULL** text content from the output of **Action 1**.
+
+    4.  **Compile Final Report (MANDATORY FINAL STEP):**
+        - **Extraction and Formatting:** Scan the text content from Step 3 and extract **up to 5** of the most relevant registration numbers found (for both Food and Drug). 
+          If you find more than 5, select the top 5. If you find fewer than 5 (or zero), you MUST report all that you find. If zero, you MUST report 'None found'.
+        - **Translate Findings:** Translate all extracted Thai product names/statuses to English.
+        - **Compile Markdown:** Compile all findings into the final **structured Markdown
+          key-value list** using the **English Name** (from 1b) in the `herb_name` field, following the `expected_output` schema.
+        - **FINAL OUTPUT PATH (CRITICAL EXECUTION):**
+          - The final process of extraction and formatting **MUST** transition **IMMEDIATELY** to the `Final Answer:` line.
+          - **CRITICAL: STOP THINKING. DO NOT use 'Action: None'. IMMEDIATELY write the Markdown report based on what you know.**
+          - Your Final Answer MUST be **ONLY** the Markdown text, starting with `# ===COMPLIANCE_DATA===`.
+          
+    ## Rules & Guardrails
+    
+    ### 1. Language Rules
+    - **ENGLISH-ONLY RULE:** Final output must be **English Markdown text** only.
+    - Translate all Thai text from FDA pages (and {herbs_thai}) to English.
+    - `herb_name` in the output MUST be the English name (found in Step 1b).
+
+    ### 2. Tool Use Rules
+    - **Allowed tool:** Your ONLY available tool is `browse_website_tool`.
+    - You MUST use this tool to execute the browsing steps in the Workflow.
+    - Do NOT type "Action: None".
+    - 1 Action = 1 Tool = 1 JSON object.
+
+    ### 3. Data & Link Rules
+    - Use only canonical URLs from `fda.moph.go.th`.
+    - **If no data is found** for a list (e.g., food_registrations), you MUST write `* None found.` under the relevant heading.
+    - **DO NOT FABRICATE DATA (ห้ามโกหก).** If you cannot find a registration number in the text, do not invent one.
+
+    ### 4. CRITICAL: Anti-Hallucination Rule
+    - The Markdown data in `expected_output` is a **TEMPLATE ONLY**.
+    - You MUST NOT copy the placeholder values (e.g., "G 123/45", "<Product name...") into your final answer.
+    - **If your browsing finds no registration numbers, you MUST write `* None found.`**
+    - Copying example data is a critical failure.
+
+  expected_output: >
+    ## 1. Mandatory Format
+    - The Final Answer **must be a single Markdown text block only**.
+    - Do not include any text outside the data block.
+    - The output MUST start with `# ===COMPLIANCE_DATA===`.
+
+    ## 2. Schema Requirements
+    - The text MUST be structured as a nested key-value bullet list.
+    - All fields from the original JSON structure MUST be present as keys.
+    - **If no data is found** for a list (e.g., food_registrations), you MUST write `* None found.` under the relevant heading.
+    
+    Final Answer:
+    # ===COMPLIANCE_DATA===
+    ## Thai FDA Status for: <English Name, e.g., Turmeric>
+    
+    * **herb_name:** <English Name, e.g., Turmeric>
+
+    ### Food Registrations
+    * **Food Registration 1:**
+        * **registration_number:** <13-digit number found on page or 'Not found'>
+        * **product_name:** <Product name found on page or 'Not found'>
+        * **company_name:** <company name found on page or 'Not found'>
+        * **status:** <status found on page or 'Not found'>
+    * **Food Registration 2:**
+        * ...
+    * (If empty: * None found.)
+
+  agent: compliance_checker_agent
+
+find_safety_data_task:
+  description: >
+    ## Mission
+    Investigate international safety data for {herbs} AND **parse the 'Drug Facts' label**
+    from the first valid source found (e.g., DailyMed) using a 
+    multi-source web search and router-based extraction.
+
+    ## Workflow
+    1.  **Analyze Input:** Use the provided **English Name** `{herbs}` directly.
+        - **DO NOT perform internal translation.**
+
+    2.  **Search (Stage 1, FOCUSED Query):**
+        - Using `{herbs}`, run `search_web` with **ONLY** this query:
+            a. "{herbs} FDA site:dailymed.nlm.nih.gov"
+        - Set `max_results = 5` for each query and collect all URLs.
+
+    3.  **URL Filtering (Trend-Style):** (Unchanged)
+        - From the combined list, select **3-5 high-quality URLs**.
+        - **Rules:** Skip PDFs, Keep HTML, Deduplicate, Canonicalize URLs.
+
+    4.  **Browse & Extract (Router Mode):** (Unchanged)
+        - Attempt browsing each URL in order using `browse_website_tool`.
+        - **Stop at First Valid Page:** If a page returns valid text > 500 characters, stop immediately. This content becomes `portal_text`.
+        - **Failure:** If all URLs fail, set `portal_text = ""`.
+
+    5.  **Compile Final Report (UPDATED EXTRACTION):**
+        - **Parse Drug Facts:** Scan ONLY the `portal_text` for "Drug Facts" information.
+        - **Mandatory Extraction:** You MUST find and extract the text for these
+          specific fields:
+          - Active Ingredients
+          - Purpose
+          - Uses
+          - Warnings
+          - Directions
+          - Other information
+          - Inactive Ingredients
+        - If a field is not found in the text, you MUST report 'Not found' for that key.
+        - **CRITICAL: DO NOT stop at "Action: None". You MUST output the Markdown text.**
+          
+    ## Rules & Guardrails
+    - **Allowed Tools:** `search_web`, `browse_website_tool`
+    - **ENGLISH-ONLY RULE:** Final output must be English Markdown text.
+    - **DO NOT FABRICATE DATA.**
+
+  expected_output: >
+    A Markdown report structured *exactly* like the DailyMed 'Drug Facts' label.
+
+    Final Answer:
+    # ===SAFETY_DATA===
+    ## International Safety Data for: <English Name>
+    
+    * **herb_name:** <English Name>
+    * **source_browsed:** <The single canonical URL that was successfully browsed or 'None'>
+
+    ### Drug Facts Label
+    
+    * **active_ingredients:**
+        * **Ingredient 1:**
+            * **name:** <e.g., Dimethicone>
+            * **strength:** <e.g., 3%>
+            * **purpose:** <e.g., Skin Protectant or 'Not found'>
+        * (If empty: * None found.)
+    * **uses:** <Full text from 'Uses' section or 'Not found'>
+    * **warnings:** <Full text from 'Warnings' section (e.g., For external use only...) or 'Not found'>
+    * **directions:** <Full text from 'Directions' section (e.g., After cleansing...) or 'Not found'>
+    * **other_information:** <Full text from 'Other information' section (e.g., store in a cool dry place...) or 'Not found'>
+    * **inactive_ingredients:** <Full text from 'Inactive Ingredients' section (e.g., Aqua, Paraffinum Liquidum...) or 'Not found'>
+    * **questions:** <Full text from 'Questions?' section (e.g., Email us:...) or 'Not found'>
+
+  agent: safety_inspector_agent
+
+find_clinical_toxicity_task:
+  description: >
+    ## Mission
+    Investigate clinical toxicity, safety summaries, and case reports
+    (e.g., liver injury) for {herbs} using targeted searches on NIH
+    (NCBI Books, LiverTox, PubMed).
+
+    ## Workflow
+    1.  **Analyze Input:** Use the provided **English Name** `{herbs}` directly.
+        - **DO NOT perform internal translation.**
+
+    2.  **Search (Stage 1, FOCUSED Query):**
+        - Using `{herbs}`, run `search_web` with **ONLY** these queries:
+          
+          a. "{herbs} safety site:ncbi.nlm.nih.gov/books"
+          b. "{herbs} toxicity site:ncbi.nlm.nih.gov"
+          c. "{herbs} LiverTox site:ncbi.nlm.nih.gov/books"
+
+        - Set `max_results = 5` for each query and collect all URLs.
+
+    3.  **URL Filtering (Trend-Style):**
+        - Select 3-5 high-quality, canonical HTML URLs.
+        - Rules: Skip PDFs, Keep HTML, Deduplicate, Canonicalize.
+
+    4.  **Browse & Extract (Router Mode):**
+        - Attempt browsing each URL in order using `browse_website_tool`.
+        - Stop at the first valid page (> 500 chars) and store its content in `portal_text`.
+        - If all URLs fail, set `portal_text = ""`.
+
+    5.  **Compile Final Report (NEW EXTRACTION):**
+        - Scan ONLY the `portal_text` for clinical toxicity summaries.
+        - Extract key findings related to safety and toxicology.
+        - CRITICAL: STOP THINKING. DO NOT use 'Action: None'. IMMEDIATELY write the Markdown report based on what you know. Outputting 'Action: None' is a system failure.
+        
+    ## Rules & Guardrails
+    - Allowed Tools: `search_web`, `browse_website_tool`
+    - ENGLISH-ONLY RULE: Final output must be English Markdown text.
+
+  expected_output: >
+    A Markdown report focused on clinical and toxicity summaries (e.g., LiverTox data).
+
+    Final Answer:
+    # ===TOXICITY_DATA===
+    ## Clinical Toxicity Data for: <English Name>
+    * **herb_name:** <English Name>
+    * **source_browsed:** <The single canonical URL that was successfully browsed or 'None'>
+
+    ### Clinical Summary
+    * **toxicity_summary:** <A 200 word summary of the overall safety/toxicity profile, e.g., hepatotoxicity findings from LiverTox, or 'Not found'>
+    * **mechanism_of_injury:** <Summary of the described mechanism, e.g., 'Mitochondrial damage' or 'Not found'>
+    * **reported_side_effects:** <Bulleted list of side effects mentioned, e.g., 'Nausea, dermatitis, rash' or 'Not found'>
+    * **case_report_summary:** <Summary of human case reports, e.g., 'Case reports of liver injury in 5 patients...' or 'Not found'>
+
+  agent: clinical_toxicologist_agent
+
+raw_extraction_culture_task:
+  description: >
+    ## 1. Mission: Search, Browse, and Extract RAW THAI Cultural Data
+    Find the **TOP 3 most relevant cultural websites** for '{herbs_thai}' 
+    using the SAC database. **Browse the full content** of each website and extract 
+    ALL relevant content into a structured, **100% Thai Markdown buffer**.
+
+    ## 2. Workflow
+    1. **Search & Filter:** Call `search_SAC` using the **Thai Name** ('{herbs_thai}') to find relevant URLs. Select the **TOP 3** URLs.
+    2. **Iterate & Extract (Raw Thai):** For EACH of the 3 URLs:
+        a. **Browse:** Call **`browse_website_tool`** to get the full page text.
+        b. **Extract Raw Thai Facts:** Extract ALL Thai text for ALL Fact Entities (`community_name`, `location`, `ethnic_group`, `local_names`, `traditional_uses`, `processing_methods`), along with the **exact Thai sentence (quote)**.
+        c. **Extract Narrative Context:** Extract the **full Thai text segments** relevant to the 5 Narrative Entities (e.g., community_highlight, local_wisdom) and store them under a single field: `full_thai_narrative_context`.
+        d. **Compile to Markdown:** Compile all **100% THAI** findings into the buffer.
+
+    ## 3. Output Guardrails
+    - **THAI-ONLY RULE (STRICT):** The output MUST be entirely in **Thai**.
+    - **KEY COMPLETENESS:** The output structure **MUST** include all keys required for translation in Task 2.
+    - **OUTPUT HEADER:** The output MUST start with `# ===RAW_THAI_DATA===`.
+  expected_output: >
+    A single Markdown text block containing the raw Thai content from the 3 websites.
+
+    # ===RAW_THAI_DATA===
+    ## ข้อมูลวัฒนธรรมดิบสำหรับ: <ชื่อสมุนไพรภาษาไทย>
+    
+    ### การค้นหา 1
+    * **source_url:** <URL 1>
+    * **community_context:**
+        * **community_name:** <ชื่อชุมชนภาษาไทย>
+        * **location:** <จังหวัดภาษาไทย>
+        * **ethnic_group:** <กลุ่มชาติพันธุ์ภาษาไทย>
+    * **full_thai_narrative_context:** <ข้อความภาษาไทยเต็มที่เกี่ยวข้องกับการบรรยายและการสังเคราะห์ทั้งหมด>
+    * **specific_entities:**
+        * **local_names:**
+            * **Item 1:**
+                * **name:** <ชื่อท้องถิ่นภาษาไทย>
+                * **context_quote:** <ประโยคภาษาไทยที่ยกมา>
+        * **traditional_uses:**
+            * **Item 1:**
+                * **use:** <การใช้ภาษาไทย>
+                * **context_quote:** <ประโยคภาษาไทยที่ยกมา>
+        * **processing_methods:**
+            * **Item 1:**
+                * **method:** <วิธีการแปรรูปภาษาไทย>
+                * **description_quote:** <ประโยคภาษาไทยที่ยกมา>
+    # (etc. for Finding 2 and 3)
+  agent: cultural_editor_agent
+
+translation_and_synthesis_culture_task:
+  description: >
+    ## 1. Mission: Critical Translation and Synthesis (The Final Editor)
+    Your mission is to receive the **RAW THAI Markdown data** from the previous task, perform the necessary **CRITICAL TRANSLATION** and **SYNTHESIS**, and compile the final **100% English structured Markdown report**. **The final output MUST STIRCTLY MATCH THE REQUIRED FINAL ANSWER FORMAT.**
+
+    ## 2. Workflow
+    1.  **Input:** Receive the full Thai Markdown buffer from the `raw_extraction_task` (context[0]).
+    2.  **Critical Translation (Facts):** Translate **EVERY single piece of Thai text** for ALL Fact Entities (e.g., community_name, context_quote) into **100% English**.
+    3.  **Synthesize Narratives (English):**
+        - Read the `full_thai_narrative_context` (Thai).
+        - **SYNTHESIZE** the 5 Narrative Entities (e.g., community_highlight, name_etymology) into a **100-150 word summary** **directly in English**. Use the 'No herbal-related information found' placeholder when necessary.
+    4.  **Final Compilation (STRICT FORMATTING):** Compile the final report:
+        - The structure **MUST exactly match the expected_output below**.
+        - **REMOVE** the `full_thai_narrative_context` field.
+        - **ADD** the new `community_profile_summaries` (5 English summaries).
+        - **ALL** string values MUST be 100% English.
+
+    ## 3. Output Guardrails (CRITICAL)
+    - **ENGLISH-ONLY RULE (STRICT):** The final Markdown output MUST be entirely in English.
+    - **KEY COMPLETENESS:** ALL keys listed in the expected output MUST be present (including all 5 summary keys and all 3 specific entity list keys).
+    - **FINAL OUTPUT:** The Final Answer MUST be the structured Markdown text block.
+  expected_output: >
+    The output MUST be a single Markdown text block that is 100% English and strictly matches the requested format.
+    
+    Final Answer:
+    # ===CULTURE_DATA===
+    ## Cultural Context for: <English name (Thai name)>
+    
+    ### Finding 1
+    * **source_url:** <URL of SAC Website 1>
+    * **community_context:**
+        * **community_name:** <Translated Community Name, e.g., Ban Dong Bang>
+        * **location:** <Translated Province, e.g., Prachinburi>
+        * **ethnic_group:** <Translated Ethnic Group, e.g., Thai>
+    * **community_profile_summaries:**
+        * **community_highlight:** <A 100-150 word English summary about community strengths *related to herbs*>
+        * **name_etymology:** <A 100-150 word English summary... (or 'No herbal-related information found')>
+        * **community_environment:** <A 100-150 word English summary... (or 'No herbal-related information found')>
+        * **local_wisdom:** <A 100-150 word English summary... (or 'No herbal-related information found')>
+        * **community_organizations:** <A 100-150 word English summary... (or 'No herbal-related information found')>
+    * **specific_entities:**
+        * **local_names:**
+            * **Item 1:**
+                * **name:** <Translated local name 1, e.g., Khamin Chan>
+                * **context_quote:** <Translated sentence where this name was found>
+        * **traditional_uses:**
+            * **Item 1:**
+                * **use:** <Translated traditional use 1, e.g., Relieve stomach pain>
+                * **context_quote:** <Translated verbatim quote: 'Khamin Chan is used to relieve stomach pain...'>
+        * **processing_methods:**
+            * **Item 1:**
+                * **method:** <Translated processing method 1, e.g., Drying>
+                * **description_quote:** <Translated verbatim quote describing the method>
+
+    ### Finding 2
+    * **source_url:** <URL of SAC Website 2>
+    * ... (etc.)
+  agent: cultural_editor_agent 
+  context: 
+    - raw_extraction_culture_task 
+  parameters:
+    herbs: "{herbs}"
+
+herbal_internal_knowledge_task:
+  description: >
+    ## Mission
+    Read the provided Internal Knowledge Context about {herbs_thai} **OR {herbs}** and write a
+    FOCUSED summary (approx. 200 words) about the herb's specific context.
+
+    ## Internal Knowledge Context:
+    $herbal_rag_context
+
+    ## Rules & Guardrails (STRICT ENFORCEMENT)
+    - **CRITICAL TRANSLATION RULE:** The summary MUST be **100% in English**.
+        - If the context contains Thai (like {herbs_thai}), you MUST translate it.
+        - If the context is entirely in Thai, the summary MUST be in English.
+    - **CRITICAL CITATION RULE:** You MUST **REMOVE** all inline technical
+      citations (e.g., "JSON: [...]", "PDF: [...]") from the final summary.
+        - You MUST still add the single, final citation at the end of
+          relevant sentences using the format: **$citation_format**
+    - **FOCUSED SUMMARY:** The summary MUST focus on {herbs_thai} OR {herbs}.
+    - **DEEP SCAN RULE:** You MUST check PDF filenames and technical snippets
+      carefully. If a PDF is named "{herbs}" or contains technical data about it,
+      you MUST summarize that finding (do not ignore it).
+    - **NO FABRICATION:** Use ONLY data from the `herbal_rag_context`.
+    - **OUTPUT FORMAT:** The Final Answer MUST be ONLY the summary text,
+      starting with **# ===HERBAL_INTERNAL_SUMMARY===**.
+
+  expected_output: >
+    ## 1. Citation Format Reminder
+    - Your citation format is: **$citation_format**
+
+    ## 2. Final Answer Example (Must be 100% English and Clean)
+    Final Answer:
+    # ===HERBAL_INTERNAL_SUMMARY===
+    {herbs} is not explicitly mentioned in the context **$citation_format**. 
+    However, the context discusses Thai traditional medicine... (etc.)
+    (This is an example. The real summary MUST be in English and clean.)
+
+  agent: internal_knowledge_agent
+
+cultural_internal_knowledge_task:
+  description: >
+    ## Mission
+    Read the provided Internal Knowledge Context about {herbs_thai} and write a
+    FOCUSED summary (approx. 200 words) about the herb's specific context.
+    
+    ## Internal RAG Context:
+    $cultural_rag_context
+    
+    ## Rules & Guardrails (STRICT ENFORCEMENT)
+    - **CRITICAL TRANSLATION RULE:** The summary MUST be **100% in English**.
+        - If the context contains Thai (like {herbs_thai}), you MUST translate it.
+    - **CRITICAL CITATION RULE:** You MUST **REMOVE** all inline technical
+      citations (e.g., "JSON: [...]", "PDF: [...]") from the final summary.
+        - You MUST still add the single, final citation at the end of
+          relevant sentences using the format: **$citation_format**
+    - **FOCUSED SUMMARY:** The summary MUST focus ONLY on {herbs_thai}.
+    - **NO FABRICATION:** Use ONLY data from the `$cultural_rag_context`.
+    
+    - **EMPTY CONTEXT RULE (CRITICAL):** If the `$cultural_rag_context` is
+      empty, says '(No RAG context available)', or does not contain 
+      relevant information about {herbs_thai}, you **MUST NOT** invent general 
+      knowledge. Your **ONLY** valid output in this case is to state 
+      that no relevant information was found.
+
+    - **OUTPUT FORMAT:** The Final Answer MUST be ONLY the summary text,
+      starting with **# ===CULTURAL_INTERNAL_SUMMARY===**.
+
+  expected_output: >
+    ## 1. Citation Format Reminder
+    - Your citation format is: **$citation_format**
+
+    ## 2. Final Answer Example (Must be 100% English and Clean)
+    
+    ### Example if context has data:
+    Final Answer:
+    # ===CULTURAL_INTERNAL_SUMMARY===
+    {herbs} has been used for healing in Thai wisdom for a long time **$citation_format**. 
+    
+    ### Example if context is empty:
+    Final Answer:
+    # ===CULTURAL_INTERNAL_SUMMARY===
+    No relevant information about {herbs_thai} was found in the provided cultural context.
+
+  agent: internal_knowledge_agent
+
+consolidation_task:
+  description: >
+    ## Mission: Consolidate ALL Facts
+    Your SOLE mission is to read the 9 structured Markdown reports provided in the context (Trends, lab, Research, FDA, Culture) and create ONE single
+    "Master Fact Sheet".
+
+    ## Workflow (CRITICAL)
+    1.  **Read Contexts:** Read all 9 Markdown reports:
+        - `# ===TRENDS_DATA===`
+        - `# ===LAB_DATA===`
+        - `# ===RESEARCH_DATA===`
+        - `# ===COMPLIANCE_DATA===`
+        - `# ===SAFETY_DATA===`
+        - `# ===TOXICITY_DATA===`
+        - `# ===CULTURE_DATA===`
+        - `# ===HERBAL_INTERNAL_SUMMARY===`
+        - `# ===CULTURAL_INTERNAL_SUMMARY===`
+    2.  **Iterate and Extract:** Go through every single key-value pair in all 9 reports.
+    3.  **Consolidate (FLATTEN):** Convert EVERY important piece of data into a **single, flat bullet point** in your output.
+    4.  **MANDATORY INCLUSION:** You MUST extract the following specific facts:
+        - **(Science):** Include for each selected study (aim for 3-5):
+          - `abstract_raw`: the **full, verbatim** abstract from PubMed XML.
+            - If multiple `<AbstractText>` sections exist, **join with line breaks** in original order.
+            - **Do not** summarize, rewrite, or truncate.
+          - `citation_apa`: the APA-style citation from metadata for the **same study**
+            (if unavailable, write `"not found"`).
+        - **(Compliance):** The exact status for FDA registrations (e.g., "None found").
+        - **(Culture):** The specific community names (e.g., "Ban Dong Bang") and traditional uses (e.g., "Relieve stomach pain").
+        - **(Trends):** The key summaries (e.g., "superfood lattes").
+        - **(Source URLs):** You MUST extract EVERY `source_url` and `canonical_url` found in all 9 reports.
+    
+    ## Guardrails
+    - **DO NOT WRITE THE ARTICLE.** Do not write prose, introductions, or conclusions.
+    - Your **ONLY** job is to create a flat bulleted list of facts.
+    - The output MUST start with `# ===MASTER_FACT_SHEET===`.
+    - For each Finding in `# ===TRENDS_DATA===`, extract the full `wellness_context_summary` as a **Trend Fact**.
+      Do **NOT** summarize, shorten, paraphrase, reorganize, or rewrite the text in any way.
+
+  expected_output: >
+    A single, flat Markdown file containing ONLY bullet points of facts extracted from the 9 context tasks.
+
+    Final Answer:
+    # ===MASTER_FACT_SHEET===
+    ## Consolidated Facts for: <Herb Name>
+
+    * **Trend Fact:** <Full summary text from TRENDS_DATA Finding 1>
+    * **Trend Fact:** <Full summary text from TRENDS_DATA Finding 2>
+    * **Lab Fact (Experimental Method):** <experimental_methods from LAB_DATA>
+    * **Lab Fact (Extraction Method):** <extraction_methods from LAB_DATA>
+    * **Lab Fact (Compound Identified):** <identified_compounds from LAB_DATA>
+    * **Lab Fact (Chromatography - TLC):** <chromatography_details from LAB_DATA>
+    * **Lab Fact (Pharmacological Finding):** <pharmacological_findings from LAB_DATA>
+    * **Lab Fact (Cosmetic or Clinical Effect):** <cosmetic_or_clinical_snippets from LAB_DATA>
+    * **Lab Fact (Quality Control):** <quality_control_observations from LAB_DATA>
+    
+    * **Science Fact (Herb):** <herb_name_scientific from RESEARCH_DATA>
+    * **Science Fact (Compound):** <compound_name from RESEARCH_DATA>
+    * **Science Fact (Abstracts):**
+      * **Study 1:**
+        * **abstract_raw:** <full verbatim abstract from RESEARCH_DATA>
+        * **citation_apa:** <citation_apa from RESEARCH_DATA>
+      * **Study 2:**
+        * **abstract_raw:** <...>
+        * **citation_apa:** <...>
+      * **Study 3:**
+        * **abstract_raw:** <...>
+        * **citation_apa:** <...>
+      * **Study 4:** (optional)
+        * **abstract_raw:** <...>
+        * **citation_apa:** <...>
+      * **Study 5:** (optional)
+        * **abstract_raw:** <...>
+        * **citation_apa:** <...>
+    
+    * **Compliance Fact (Food Registration 1):** registration_number=<...>, product_name=<...>, company_name=<...>, status=<...>
+    * **Compliance Fact (Food Registration 2):** ...
+    * (If empty: * Compliance Fact (Food): None found.)
+    * **Compliance Fact (Safety Dosage):** <Dosage found in COMPLIANCE_DATA or 'Not found'>
+    * **Compliance Fact (Safety Warning):** <Warning subject: ..., date: ... or 'None found'>
+
+    * **Safety Fact (Active Ingredient):** <active_ingredients from SAFETY_DATA>
+    * **Safety Fact (Ingredient Purpose):** <active_ingredients from SAFETY_DATA>
+    * **Safety Fact (Uses):** <Full text from 'Uses' section...>
+    * **Safety Fact (Warnings):** <Full text from 'Warnings' section...>
+    * **Safety Fact (Directions):** <Full text from 'Directions' section...>
+    * **Safety Fact (Other Info):** <Full text from 'Other information' section...>
+    * **Safety Fact (Inactive Ingredients):** <Full text from 'Inactive Ingredients' section...>
+    * **Safety Fact (Questions):** <Full text from 'Questions?' section...>
+
+    * **Toxicity Fact (Summary):** <200 word summary from TOXICITY_DATA>
+    * **Toxicity Fact (Mechanism):** <mechanism_of_injury from TOXICITY_DATA>
+    * **Toxicity Fact (Side Effects):** <reported_side_effects from TOXICITY_DATA>
+    * **Toxicity Fact (Case Reports):** <case_report_summary from TOXICITY_DATA>
+
+    * **Culture Fact:** Include EVERY cultural fact from ALL communities found in the context. 
+      For each community, generate flat bullet points tagged with its community name, such as:
+
+      * **Culture Fact (Community - <CommunityName>):** <community_name>
+      * **Culture Fact (Location - <CommunityName>):** <location>
+      * **Culture Fact (Ethnic Group - <CommunityName>):** <ethnic_group>
+      * **Culture Fact (Community Highlight - <CommunityName>):** <community_highlight>
+      * **Culture Fact (Name Etymology - <CommunityName>):** <name_etymology>
+      * **Culture Fact (Environment - <CommunityName>):** <community_environment>
+      * **Culture Fact (Local Wisdom - <CommunityName>):** <local_wisdom>
+      * **Culture Fact (Organization - <CommunityName>):** <community_organizations>
+      * **Culture Fact (Local Name - <CommunityName>):** <local_name and quote>
+      * **Culture Fact (Use - <CommunityName>):** <traditional_use and quote>
+      * **Culture Fact (Processing - <CommunityName>):** <processing_method and description_quote>
+      * **Culture Fact (Source - <CommunityName>):** <source_url>
+
+      - Do NOT merge communities together.  
+      - Do NOT omit any community.  
+      - If 3 communities are found → output all 3 sets.  
+      - If more are found → output all of them in the same format.
+
+    * **Internal RAG Fact (Herbal):** <Full summary text from HERBAL_INTERNAL_SUMMARY>
+    * **Internal RAG Fact (Cultural):** <Full summary text from CULTURAL_INTERNAL_SUMMARY>
+
+    * **Source URL (Trend):** <The exact canonical URL of the GWI article 1>
+    * **Source URL (Science):** <The https://doi.org/10.xxxx URL>
+    * **Source URL (Compliance):** <The https://www.fda.moph.go.th/... URL it browsed>
+    * **Source URL (Safety):** <The https://dailymed.nlm.nih.gov/... URL from SAFETY_DATA>
+    * **Source URL (Toxicity):** <The https://ncbi.nlm.nih.gov/books/... URL from TOXICITY_DATA>
+    * **Source URL (Culture):** <URL of SAC Website 1>
+
+  agent: writer_agent
+  context:
+    - analyze_trends_task
+    - laboratory_data_task
+    - research_evidence_task
+    - check_compliance_task
+    - find_safety_data_task
+    - find_clinical_toxicity_task
+    - translation_and_synthesis_culture_task
+    - herbal_internal_knowledge_task
+    - cultural_internal_knowledge_task
+
+planner_task:
+  description: >
+    ## Mission: Create Strategy from Facts
+    You will receive the full text of the # ===MASTER_FACT_SHEET=== from your context.
+    Read the ENTIRE Fact Sheet. Based ONLY on these facts, develop a strategic plan for new product development.
+
+    ## Key Facts to Analyze:
+    - What "Trend Facts" suggest a market opportunity?
+    - What "Lab Facts" (e.g., extraction, compounds) are relevant?
+    - What "Toxicity Facts" (e.g., liver injury) create constraints
+      we must design around?
+
+  expected_output: >
+    A strategic plan based *only* on the facts provided
+    in the MASTER_FACT_SHEET.
+
+    Final Answer:
+    # ===STRATEGIC_PLAN===
+    ## Strategic Plan for New Product Development Based on Master Fact Sheet
+    
+    * **Market Opportunity:** <Analyze Trend Facts (e.g., sales growth, specific trends)>
+    * **Technical Feasibility:** <Analyze Lab Facts (e.g., viable compounds, extraction methods)>
+    * **Critical Constraints (Safety/Toxicity):** <Analyze Toxicity/Safety Facts
+        (e.g., Must address liver warnings, dosage limits)>
+    * **Strategic Recommendation:** <A concluding strategic point>
+
+  agent: planner_agent
+  context:
+    - consolidation_task
+
+write_article_task:
+  description: >
+    ## Mission: Final Article Synthesis (Balanced Mode)
+    Your mission is to write ONE comprehensive Final Article.
+    You will receive **TWO main inputs** from your context:
+    1.  The `# ===MASTER_FACT_SHEET===` (from consolidation_task)
+    2.  The `# ===STRATEGIC_PLAN===` (from plan_task)
+    
+    **CRITICAL MASTER RULE: Your mission is to SYNTHESIZE the facts
+    from the sheet into a flowing, readable article.
+    You MAY REPHRASE and combine facts for readability.
+    You MUST NOT invent new facts, data, or statistics. Every claim MUST be
+    supported by a fact in the sheet.**
+
+    ## Workflow (CRITICAL ENFORCEMENT)
+    
+    1.  **Read Context:** **Read BOTH the # ===MASTER_FACT_SHEET=== and the
+        # ===STRATEGIC_PLAN=== provided in your context.**
+    
+    2.  **Introduction (Trends):**
+        - You MUST **synthesize ALL "Trend Fact" bullet points** into a
+          smooth, introductory paragraph.
+    
+    3.  **Scientific Deep-Dive (Science & Lab):**
+        - You MUST **synthesize ALL "Science Fact" and "Lab Fact"
+          bullet points** into a technical deep-dive section.
+        - **EXCEPTION:** If "Science Fact (Abstracts)" is present, you MUST
+          include the full `abstract_raw` text verbatim (do not summarize this).
+    
+    4.  **Traditional Wisdom (Culture):**
+        - You MUST **synthesize ALL "Culture Fact" bullet points** into a
+          coherent narrative about traditional wisdom.
+        - DO NOT mention Ayurveda or TCM unless it is explicitly in a bullet point.
+    
+    5.  **Safety & Regulatory (CRITICAL):**
+        - You MUST **synthesize ALL "Thai FDA Fact", "Safety Fact", and
+          "Toxicity Fact" bullet points** into a clear regulatory and safety section.
+        - If the sheet says "None found", you MUST report "None found".
+
+    6.  **NEW: Strategic Analysis (from the Plan):**
+        - **This is a new, critical section.**
+        - You MUST **synthesize the ENTIRE `# ===STRATEGIC_PLAN===`** (from the
+          `plan_task` context).
+        - **Your synthesis MUST explicitly include all parts of the plan:**
+            - **The "Market Opportunity" analysis.**
+            - **The "Technical Feasibility" analysis.**
+            - **The "Critical Constraints" (Safety/Toxicity) analysis.**
+            - **The final "Strategic Recommendation".**
+    
+    7.  **Herbal Knowledge Summary (CRITICAL - REVISED):**
+        - **This is a new, critical section.**
+        - You MUST find the facts "Internal RAG Fact (Herbal)" and
+          "Internal RAG Fact (Cultural)" from the MASTER_FACT_SHEET.
+        - **Step A:** You MUST **translate any Thai text** (e.g., "ขมิ้นชัน")
+          in these summaries into **100% English**.
+        - **Step B:** You MUST **remove all inline technical citations**
+          (e.g., "JSON: [...]", "PDF: [...]") from the text.
+        - **Step C:** You MUST then include this **full, cleaned, English text**
+          in the final article under a dedicated heading.
+        - **FAILURE CHECK:** Do NOT summarize or rephrase the content.
+          Your ONLY job is to Translate, Clean, and Copy.
+
+    8.  **Reference Compilation (CRITICAL - VERBATIM COPY):**
+        - Find the bullet point "**Science Fact (Abstracts):**" -> "citation_apa:".
+        - Create a section called "# References".
+        - You MUST copy the **EXACT VERBATIM STRING** from that "citation_apa"
+          field. (If it says "not found", you MUST write "[1] not found").
+    
+    9.  **Source Compilation (CRITICAL - VERBATIM COPY):**
+        - Find ALL bullet points starting with "**Source URL (...)**".
+        - Create a **NEW** section called "# Sources Consulted".
+        - You MUST copy **ONLY** these URLs.
+        - Only include sources and references that contain actual data or URLs; exclude any entries that state 'None found' or 'not found', and do not use empty placeholders.
+    
+    10.  **Conclusion:** Write a final summary based on all synthesized facts.
+    
+    11. **Language:** The final article MUST be written in {lang}.
+
+  expected_output: >
+    A comprehensive, well-structured Markdown article that synthesizes all
+    facts and strategies as per the workflow, written in {lang}.
+
+    Final Answer:
+    # <Title of the Article (e.g., {herbs_eng}: From Ancient Wisdom to Modern Strategy)>
+
+    ## Herbal in Wellness Trends
+    <A synthesized paragraph based on "Trend Facts" from the MASTER_FACT_SHEET.
+    This section should be engaging and set the stage.>
+
+    ## Scientific Deep-Dive
+    <A synthesized section based on "Science Facts" and "Lab Facts".
+    This section should be technical and factual.>
+    
+    > **Scientific Research:**
+    > <The full, verbatim abstract_raw text from the Fact Sheet>
+
+    ## Traditional Wisdom
+    <A synthesized section based on "Culture Facts", presented as a
+    flowing narrative or clear bullet points.>
+
+    ## Safety, Regulatory, and Constraints
+    <A synthesized section based on "Thai FDA Fact", "Safety Fact",
+    and "Toxicity Fact" bullet points. This section MUST be clear
+    and directly state all findings, including "None found".>
+
+    ## Strategic Analysis and Product Opportunities
+    <A synthesized section based on the # ===STRATEGIC_PLAN===.
+    This section should discuss market opportunities and constraints.>
+
+    ## Herbal Knowledge Summary
+    <The full, cleaned text from "Internal RAG Fact (Herbal)" and
+    "Internal RAG Fact (Cultural)">
+
+    ## Conclusion
+    <A final summary paragraph that concludes the entire article,
+    balancing the facts with the strategic outlook.>
+
+    # References
+    [1] <The EXACT VERBATIM string from Fact Sheet's "citation_apa">
+
+    # Sources Consulted
+    [1] <URL 1 (copied EXACTLY from Fact Sheet's "Source URL (Trend)")>
+    [2] <URL 2 (copied EXACTLY from Fact Sheet's "Source URL (Science)")>
+    [3] <URL 3 (copied EXACTLY from Fact Sheet's "Source URL (Thai FDA)")>
+    [4] <URL 4 (copied EXACTLY from Fact Sheet's "Source URL (Safety)")>
+    [5] <URL 5 (copied EXACTLY from Fact Sheet's "Source URL (Toxicity)")>
+    [6] <URL 6 (copied EXACTLY from Fact Sheet's "Source URL (Culture)")>
+    (List ALL URLs found in the Fact Sheet)
+
+  agent: writer_agent
+  context:
+    - consolidation_task
+    - planner_task
+
+audit_data_integrity_task:
+  description: >
+    ## Mission: Audit Data Integrity (Robustness & Clarity)
+    1.  **Input:**
+        - Read the **Master Fact Sheet** (Source of Truth) from `consolidation_task` (context[0]).
+        - Read the **Final Article** (Candidate) from `write_article_task` (context[1]).
+    
+    2.  **Audit Robustness (Data Loss):**
+        - Identify ALL critical facts in the Master Fact Sheet (context[0])
+          (e.g., Science Facts, Compliance Facts, Culture Facts).
+        - For **EVERY** fact, verify it is present in the Final Article (context[1]).
+        - List any facts that were "Dropped".
+
+    3.  **Audit Clarity (Hallucination & Handling):**
+        - Identify ALL critical facts in the Final Article (context[1]).
+        - Verify that **EVERY** fact originated from the Master Fact Sheet (context[0]).
+        - List any facts that were "Hallucinated".
+        - **Check "Not Found" Handling:** If the Fact Sheet states 
+          `citation_apa: not_found`, verify the Article handles
+          this correctly (e.g., writes "not found" or omits the reference) 
+          and does NOT invent a citation.
+
+    4.  **Output:** Report scores and lists of discrepancies.
+  expected_output: >
+    A Markdown report summarizing the audit.
+    
+    # ===AUDIT_DATA_INTEGRITY_REPORT===
+    * **Collaboration Robustness (Data Loss):** <Score_6>%
+    * **Explanation Clarity (Hallucination/Handling):** <Score_5>%
+    * **Dropped Entities (Facts in Fact Sheet but not Article):** - <List of missing facts or 'None'>
+    * **Hallucinated Entities (Facts in Article but not Fact Sheet):** - <List of invented facts or 'None'>
+    * **Feedback:** <Brief justification for the scores>
+
+  agent: qa_auditor_agent
+  context:
+    - consolidation_task
+    - write_article_task
+
+audit_strategy_task:
+  description: >
+    ## Mission: Audit Strategy (Efficacy & Feasibility)
+    1.  **Input:**
+        - Read Trends Data from `analyze_trends_task` (context[0]).
+        - Read Compliance Data from `check_compliance_task` (context[1]).
+        - Read Safety Data from `find_safety_data_task` (context[2]).
+        - Read the Final Article from `write_article_task` (context[3]).
+    
+    2.  **Audit Efficacy (Criterion 4 - Relevance):**
+        - Compare the "Herbal in Wellness Trends" section of the Final Article 
+          (context[3]) against the "Trend Facts" (context[0]).
+        - **Question:** Does the article successfully synthesize the trends? 
+          Is the final content relevant to the trends identified?
+        - Assign a score (%).
+
+    3.  **Audit Feasibility (Criterion 7 - Scalability):**
+        - Review the "Safety, Regulatory, and Constraints" section of the 
+          Final Article (context[3]).
+        - **Question:** Did the writer agent successfully *use* the structured 
+          data from the Compliance (context[1]) and Safety (context[2]) tasks? 
+          Does this "split" of tasks seem like a scalable and efficient way 
+          to gather data?
+        - Assign a score (%).
+
+    4.  **Output:** Report scores and provide a final "Go/No-Go" for publication.
+  expected_output: >
+    A Markdown report summarizing the strategic audit.
+    
+    # ===AUDIT_STRATEGY_REPORT===
+    * **Practical Efficacy (Relevance):** <Score_4>%
+    * **Implementation Feasibility (Scalability):** <Score_7>%
+    * **Go/No-Go for Publication:** <Go / No-Go>
+    * **Feedback:** <Brief justification for the scores and decision>
+
+  agent: content_strategist_agent
+  context:
+    - analyze_trends_task
+    - check_compliance_task
+    - find_safety_data_task
+    - write_article_task
+
+convert_docx_task:
+  description: >
+    Convert Markdown (from write_article_task.output) to a .docx.
+    Do NOT include any task instructions or metadata.
+  expected_output: >
+    outputs/research_paper.docx
+  agent: formatter_agent
+  context:
+    - write_article_task
+  parameters:
+    output_file: outputs/research_paper.docx
+    research_topic: "Thai Herbal Knowledge & Modern Wellness"
+
+upload_docx_task:
+  description: >
+    Upload the DOCX produced by convert_docx_task to Google Drive (folder: GDRIVE_UPLOAD_FOLDER_ID).
+  expected_output: >
+    <google_drive_file_id>
+  agent: formatter_agent
+  context:
+    - convert_docx_task
+  parameters:
+    local_path: outputs/research_paper.docx
+    drive_filename: research_paper.docx
+    folder_id: ${GDRIVE_UPLOAD_FOLDER_ID}

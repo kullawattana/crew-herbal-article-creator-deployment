@@ -1,0 +1,74 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+
+# Virtual Environment
+venv/
+ENV/
+env/
+.venv
+
+# Poetry
+poetry.lock
+
+# Environment variables
+.env
+.env.local
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+
+# Outputs
+# outputs/
+*.log
+#*.txt
+#*.json
+
+# Jupyter
+.ipynb_checkpoints
+
+# Testing
+.pytest_cache/
+.coverage
+htmlcov/
+
+# CrewAI
+.crewai/
+
+# Temporary files
+*.tmp
+temp/
+tmp/
+
+# Error logs
+pubmed_errors.ndjson
+
+# service
+gdrive_service_account.json
+client_secrete_gdrive_desktop.json
+
+#book
+herbal_wild_plants.pdf
